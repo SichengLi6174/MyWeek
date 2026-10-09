@@ -1,6 +1,8 @@
 # My Week
 
-A personal weekly timetable with a liquid-glass look, modelled on Google Calendar's week view. It's built to run from local files as a Safari homepage: no server, no account, and all data stays in the browser.
+A personal weekly timetable with a nice aesthetic inpired by liquid glass. It's built to run from local files as a browser homepage: no server, no account, and all data stays in the browser. Functionality and design is very minimalist as this is meant for personal use no collaboration.
+
+Note that the data persistance is through local storage, which is per browser per computer per OS and per browser profile (in some cases). The intended use case is to set it as your homepage in one browser and only use it in one browser. Clearing browser data may wipe your data so there is an export and import function built for backing up. 
 
 Mon–Sun, with 07:00–17:00 fully visible at once. Events are colour-coded by importance (High, Medium, Low, Personal).
 
