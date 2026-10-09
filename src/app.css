@@ -1,0 +1,25 @@
+:root {
+  --bg: #0b0f1c;
+  --text: #f4f6fb;
+  --text-muted: rgba(244, 246, 251, 0.66);
+  --text-faint: rgba(244, 246, 251, 0.55);
+  --line: rgba(255, 255, 255, 0.09);
+  --col-line: rgba(255, 255, 255, 0.06);
+  --now: #ff5a4e;
+  --high: 255, 99, 88;
+  --medium: 255, 184, 76;
+  --low: 92, 168, 255;
+  --personal: 70, 210, 150;
+  --gutter: 64px;
+}
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
