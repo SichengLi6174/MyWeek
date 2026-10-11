@@ -1,8 +1,6 @@
 // Plain "YYYY-MM-DD" strings and minutes-since-midnight; no timezone maths.
 const pad = (n) => String(n).padStart(2, '0')
 
-export const START_HOUR = 7
-export const END_HOUR = 17
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MONTHS_SHORT = MONTHS.map((m) => m.slice(0, 3))

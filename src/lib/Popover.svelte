@@ -1,7 +1,7 @@
 <script>
   // Glass popover shell: anchors beside an element, flips left near the right
   // edge, clamps vertically, closes on Escape / outside click.
-  let { anchorKey, width = 404, onclose, children, label = '' } = $props()
+  let { anchorKey, width = 404, onclose, children, label = '', placement = 'side' } = $props()
 
   const MARGIN = 12
   let el = $state()
@@ -13,10 +13,17 @@
     if (!a || !h) return
     const r = a.getBoundingClientRect()
     const vw = innerWidth, vh = innerHeight
-    let left = r.right + MARGIN
-    if (left + width > vw - MARGIN) left = r.left - MARGIN - width
+    let left, top
+    if (placement === 'below') {
+      left = r.right - width
+      top = r.bottom + 8
+    } else {
+      left = r.right + MARGIN
+      if (left + width > vw - MARGIN) left = r.left - MARGIN - width
+      top = r.top
+    }
     left = Math.max(MARGIN, Math.min(left, vw - width - MARGIN))
-    const top = Math.max(MARGIN, Math.min(r.top, vh - h - MARGIN))
+    top = Math.max(MARGIN, Math.min(top, vh - h - MARGIN))
     pos = { left, top }
   }
   $effect(() => { anchorKey; h; place() })
@@ -25,7 +32,7 @@
     if (e.key === 'Escape') { e.preventDefault(); onclose() }
   }
   function onoutside(e) {
-    if (el && !el.contains(e.target)) onclose()
+    if (el && !el.contains(e.target) && !e.target.closest?.(`[data-key="${CSS.escape(anchorKey)}"]`)) onclose()
   }
 </script>
 
@@ -49,6 +56,11 @@
   :global(.pop .ico) { width: 24px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: rgba(244,246,251,.6); }
   :global(.pop .iconbtn) { width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; color: rgba(244,246,251,.78); display: flex; align-items: center; justify-content: center; }
   :global(.pop .iconbtn:hover) { background: rgba(255,255,255,.08); }
+  :global(.pop .well) {
+    height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.08);
+    color: #f4f6fb; font: inherit; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 10px;
+    font-variant-numeric: tabular-nums;
+  }
   :global(.pop .primary) {
     height: 44px; padding: 0 26px; border: 1px solid rgba(255,255,255,.6); border-radius: 22px;
     background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(232,236,246,.9));

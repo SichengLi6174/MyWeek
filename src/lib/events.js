@@ -1,4 +1,5 @@
 import { weekday, DAY_FULL } from './dates.js'
+import { normalizeSettings } from './settings.svelte.js'
 
 // Does the series (ignoring overrides) have an occurrence on `date`?
 const occursOn = (ev, date) => {
@@ -77,15 +78,15 @@ export function saveEvents(events) {
 }
 
 // ---- backup file ----
-export const exportJSON = (events) =>
-  JSON.stringify({ app: 'myweek', version: 1, exportedAt: new Date().toISOString(), events }, null, 2)
+export const exportJSON = (events, settings) =>
+  JSON.stringify({ app: 'myweek', version: 1, exportedAt: new Date().toISOString(), settings, events }, null, 2)
 
 const COLOURS = ['high', 'medium', 'low', 'personal']
 const REPEATS = ['none', 'daily', 'weekly', 'weekdays']
 const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 const isMin = (v) => Number.isInteger(v) && v >= 0 && v <= 1440
 
-// Accepts the exported object or a bare array. Returns { events } or { error }.
+// Accepts the exported object or a bare array. Returns { events, settings? } or { error }.
 export function parseImport(text) {
   let data
   try { data = JSON.parse(text) } catch { return { error: "That file isn't valid JSON." } }
@@ -104,7 +105,8 @@ export function parseImport(text) {
       overrides: e.overrides && typeof e.overrides === 'object' ? e.overrides : {},
     })
   }
-  return { events }
+  const settings = Array.isArray(data) ? null : normalizeSettings(data.settings)
+  return { events, settings }
 }
 
 export const newId = () =>

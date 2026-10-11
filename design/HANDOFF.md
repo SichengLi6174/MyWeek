@@ -4,7 +4,8 @@ A personal weekly timetable that runs as my Safari homepage from local files.
 It works like Google Calendar's week view, with a liquid-glass look.
 
 ## Visual references
-- **Week view:** `design-reference.png` shows the target look, and `design-reference.html` is the same screen as static HTML/CSS.
+- **Week view:** `design-reference.png` shows the target look, and `design-reference.html` is the same screen as static HTML/CSS. Both use the default 07:00–17:00 day with 1-hour gridlines.
+- **Long-day week view:** `design-reference-uni.png` / `design-reference-uni.html` show 07:00–22:00 with the hybrid gridlines and compact short events (see Day range & gridlines).
 - **Popovers:**
   - `popover-create.png`: the quick-create popover, with the Repeat menu open.
   - `popover-details.png`: the details popover for an existing event.
@@ -14,12 +15,37 @@ It works like Google Calendar's week view, with a liquid-glass look.
 Match their tokens, spacing and glass treatment. The references are static; build the behaviour described below.
 
 ## Layout
-- One week (Mon–Sun), with **07:00–17:00 fully visible at once**. No vertical scrolling at a normal laptop viewport.
-- **One gridline per hour**, very faint (`rgba(255,255,255,0.09)`). There are no half-hour lines.
+- One week (Mon–Sun), with the **whole configured day fully visible at once** (default 07:00–17:00). No vertical scrolling at a normal laptop viewport.
+- **Gridlines** depend on the day length; see Day range & gridlines. There are never half-hour lines.
 - **Time labels** use the 24h `HH:00` format and sit in a 64px gutter.
 - **Today** has a filled red date pill, a slightly lighter column, and a red current-time line with a dot.
 - **Header:** month and year, week number and range, the importance legend, a `‹ Today ›` segmented control, and a `+ New event` button.
-- The layout scales to the viewport (the reference is 1440×900). The hour height comes from the available height: `(panel height) / 10`.
+- The layout scales to the viewport (the reference is 1440×900). The hour height comes from the available height: `(panel height) / (dayEnd − dayStart)`.
+
+## Day range & gridlines
+The visible day is a setting, so one build serves both a 07:00–17:00 personal timetable and a 07:00–22:00 uni timetable.
+
+- **Settings:** `dayStartHour` and `dayEndHour` (whole hours; defaults 7 and 17), plus `gridStyle: 'hourly' | 'hybrid'`. Store them in `localStorage` with the events and include them in Export/Import. Put them in a small settings popover reached from the header, using the same popover glass.
+- **Default grid style:** `'hourly'` when the day is 12 hours or shorter, `'hybrid'` when it is longer. The user can override it.
+- **`'hourly'`:** a line every hour at `rgba(255,255,255,0.09)`, and a label on every hour.
+- **`'hybrid'`** (`design-reference-uni.png`):
+  - A line every hour, alternating major and minor.
+  - **Major** lines fall on every second hour counted from the day start (08:00, 10:00 … 22:00 for a 07:00 start), at `rgba(255,255,255,0.11)`. Only major lines get a label.
+  - **Minor** lines fall on the hours in between, at `rgba(255,255,255,0.045)`. They have no label.
+  - The day-start hour itself (07:00) has no label; the top of the panel marks it.
+- **Snapping, minimum length and clamping** are unchanged: 30 minutes, 30 minutes, and the configured day range.
+- **Changing the range** never deletes events. Events that fall partly or wholly outside it are clipped or hidden in the grid. Show a small "n events outside visible hours" note in the header when there are any.
+
+### Event card sizes
+Shorter hours mean shorter cards, so a card picks its layout from its rendered height `h` (event length × hour height − 4px):
+
+| `h`         | Layout   | Padding / radius | Content |
+|-------------|----------|------------------|---------|
+| ≥ 60px      | full     | 7px 10px / 14px  | dot, title, repeat icon; time range on a second line |
+| 30–59px     | mid      | 5px 9px / 12px   | same as full, tighter |
+| < 30px      | compact  | 0 8px / 10px     | one line: dot, 12px title, start time on the right; no repeat icon, no range |
+
+At 48px an hour (07:00–22:00 on a 900px-tall screen), a 30-minute event is about 20px tall and uses the compact layout. The resize handles on a selected compact card sit 3px in from its top and bottom edges.
 
 ## Look
 - Dark base `#0B0F1C` with soft blurred colour blobs behind everything. The glass needs something colourful behind it to blur.
@@ -136,9 +162,9 @@ The three recurring choices map onto this model as follows:
 - **No server.** The final product is a single HTML file, set as the Safari homepage via `file:///…/dist/index.html`.
 
 ## Suggested build order
-1. Static week grid matching the reference.
+1. Static week grid matching the reference, driven by the day-range settings (check both 07–17 hourly and 07–22 hybrid against their screenshots).
 2. Event rendering from the data model, plus `localStorage` persistence.
 3. Popover shell (positioning, flipping, click-outside, Escape), then the quick-create and details popovers.
 4. Drag to move, then resize, with snapping and clamping.
 5. Recurrence expansion and the recurring dialog, wired to edits, drags and deletes.
-6. Export/import, keyboard shortcuts (`t` = today, `←`/`→` = previous/next week), and polish.
+6. Settings popover (day range and grid style), export/import, keyboard shortcuts (`t` = today, `←`/`→` = previous/next week), and polish.

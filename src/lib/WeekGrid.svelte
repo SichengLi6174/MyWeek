@@ -1,12 +1,21 @@
 <script>
   import { expand, layoutDay } from './events.js'
-  import { START_HOUR, END_HOUR, DAY_NAMES, weekDates, parseDate, fmtTime, nowMin } from './dates.js'
+  import { DAY_NAMES, weekDates, parseDate, fmtTime, nowMin } from './dates.js'
+  import { settings, gridMode } from './settings.svelte.js'
 
   let { anchor, today, events, draft = null, selectedKey = null, onsweep, onsweepend, onopen, onmoveend, preview = null } = $props()
 
-  const SPAN = (END_HOUR - START_HOUR) * 60
-  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i)
-  const pct = (min) => ((min - START_HOUR * 60) / SPAN) * 100
+  // The visible day is a setting; everything below derives from it.
+  const MIN = $derived(settings.dayStart * 60)
+  const MAX = $derived(settings.dayEnd * 60)
+  const SPAN = $derived(MAX - MIN)
+  const hours = $derived(Array.from({ length: settings.dayEnd - settings.dayStart + 1 }, (_, i) => settings.dayStart + i))
+  const pct = (min) => ((min - MIN) / SPAN) * 100
+
+  // hourly: every line and label. hybrid: lines every hour, labels on every 2nd hour from the day start.
+  const hybrid = $derived(gridMode() === 'hybrid')
+  const isMajor = (h) => (h - settings.dayStart) % 2 === 1
+  const labelHours = $derived(hybrid ? hours.filter((h) => h > settings.dayStart && isMajor(h)) : hours)
 
   let now = $state(nowMin())
   $effect(() => {
@@ -16,10 +25,16 @@
 
   const dates = $derived(weekDates(anchor))
   const occurrences = $derived(expand(events, dates))
-  const eventsFor = (date) => layoutDay(occurrences.filter((o) => o.date === date && o.key !== preview?.key))
+  // Events outside the day range are hidden; ones that straddle its edge are clipped.
+  const eventsFor = (date) =>
+    layoutDay(occurrences.filter((o) => o.date === date && o.key !== preview?.key && o.endMin > MIN && o.startMin < MAX))
+  const clip = (s, e) => [Math.max(s, MIN), Math.min(e, MAX)]
+
+  // Card layout from rendered height: full >= 60px, mid 30-59px, compact < 30px.
+  const heightPx = (s, e) => ((e - s) / 60) * hourPx - 4
+  const sizeOf = (h) => (h < 30 ? 'compact' : h < 60 ? 'mid' : 'full')
 
   // --- click / drag on empty space to sweep out a range ---
-  const MIN = START_HOUR * 60, MAX = END_HOUR * 60
   let sweep = null // { date, rect, a, x, y, moved, cancelled }
   const minAt = (rect, y) => Math.max(MIN, Math.min(MAX, MIN + ((y - rect.top) / rect.height) * SPAN))
   function sweepDraft(m) {
@@ -84,12 +99,13 @@
     const dMin = (dy / drag.rects[0].height) * SPAN
     if (drag.mode === 'move') {
       const dur = o.endMin - o.startMin
-      const s = clamp(snap(o.startMin + dMin), MIN, MAX - dur)
+      const s = clamp(snap(o.startMin + dMin), MIN, Math.max(MIN, MAX - dur))
       let i = drag.rects.findIndex((r) => e.clientX < r.right)
       if (i === -1) i = drag.rects.length - 1
       drag.dx = dx; drag.dy = dy
       drag.cur = { date: dates[i], startMin: s, endMin: s + dur }
     } else if (drag.mode === 'top') {
+      if (o.endMin - MIN < 30) return // too close to the top of the day to shrink from above
       drag.cur = { date: o.date, startMin: clamp(snap(o.startMin + dMin), MIN, o.endMin - 30), endMin: o.endMin }
     } else {
       drag.cur = { date: o.date, startMin: o.startMin, endMin: clamp(snap(o.endMin + dMin), o.startMin + 30, MAX) }
@@ -118,7 +134,7 @@
   })
 
   let bodyH = $state(0)
-  const hourPx = $derived(bodyH / (END_HOUR - START_HOUR))
+  const hourPx = $derived(bodyH / (settings.dayEnd - settings.dayStart))
   const EDGE = 4, GAP = 1 // px: outer margin, half-gap between squeezed cards
   const place = (ev) => {
     const l = ev.col === 0 ? EDGE : GAP
@@ -126,6 +142,18 @@
     return `left:calc(${ev.col} * 100% / ${ev.cols} + ${l}px);width:calc(100% / ${ev.cols} - ${l + r}px)`
   }
 </script>
+
+{#snippet card(title, repeat, s, e, size, h)}
+  <div class="t">
+    <i></i><span>{title}</span>
+    {#if size === 'compact'}
+      <em class="st">{fmtTime(s)}</em>
+    {:else if repeat && repeat !== 'none'}
+      <svg aria-label="Repeats" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>
+    {/if}
+  </div>
+  {#if size !== 'compact' && h >= 43}<div class="time">{fmtTime(s)}–{fmtTime(e)}</div>{/if}
+{/snippet}
 
 <svelte:window onkeydown={onEscape} />
 
@@ -140,7 +168,7 @@
   </div>
   <div class="cols body" bind:clientHeight={bodyH}>
     <div class="gutter">
-      {#each hours as h}
+      {#each labelHours as h}
         <div class="label" style="top:{pct(h * 60)}%">{String(h).padStart(2, '0')}:00</div>
       {/each}
     </div>
@@ -148,42 +176,45 @@
       <div class="day" class:today={date === today} class:weekend={i > 4}
         onpointerdown={(e) => down(e, date)} onpointermove={move} onpointerup={up} onpointercancel={up} role="presentation">
         {#each hours.slice(1, -1) as h}
-          <div class="line" style="top:{pct(h * 60)}%"></div>
+          <div class="line" class:major={hybrid && isMajor(h)} class:minor={hybrid && !isMajor(h)} style="top:{pct(h * 60)}%"></div>
         {/each}
         {#each eventsFor(date) as ev (ev.key)}
           {@const dragging = active?.key === ev.key ? active : null}
           {@const g = dragging && dragging.mode !== 'move' ? dragging.cur : ev}
-          <div class="ev" class:squeezed={ev.cols > 1} class:selected={selectedKey === ev.key || !!dragging} class:dragging={dragging?.mode === 'move'}
+          {@const [gs, ge] = clip(g.startMin, g.endMin)}
+          {@const h = heightPx(gs, ge)}
+          {@const size = sizeOf(h)}
+          <div class="ev {size}" class:squeezed={ev.cols > 1} class:selected={selectedKey === ev.key || !!dragging} class:dragging={dragging?.mode === 'move'}
             data-key={ev.key} role="button" tabindex="0"
             onpointerdown={(e) => evDown(e, ev)} onpointermove={evMove} onpointerup={evUp} onpointercancel={evUp}
             onclick={() => clickEv(ev)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onopen(ev))}
-            style="--tint:var(--{ev.colour});{place(ev)};top:calc({pct(g.startMin)}% + 2px);height:calc({(g.endMin - g.startMin) / SPAN * 100}% - 4px){dragging?.mode === 'move' ? `;transform:translate(${dragging.dx}px,${dragging.dy}px)` : ''}">
+            style="--tint:var(--{ev.colour});{place(ev)};top:calc({pct(gs)}% + 2px);height:calc({(ge - gs) / SPAN * 100}% - 4px){dragging?.mode === 'move' ? `;transform:translate(${dragging.dx}px,${dragging.dy}px)` : ''}">
             <span class="edge" data-edge="top"></span><span class="edge bottom" data-edge="bottom"></span>
-            <div class="t">
-              <i></i><span>{ev.title}</span>
-              {#if ev.repeat !== 'none'}
-                <svg aria-label="Repeats" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>
-              {/if}
-            </div>
-            {#if ((g.endMin - g.startMin) / 60) * hourPx - 4 >= 50}<div class="time">{fmtTime(g.startMin)}–{fmtTime(g.endMin)}</div>{/if}
-            {#if selectedKey === ev.key || dragging}<span class="handle" style="top:4px"></span><span class="handle" style="bottom:4px"></span>{/if}
+            {@render card(ev.title, ev.repeat, g.startMin, g.endMin, size, h)}
+            {#if selectedKey === ev.key || dragging}
+              {@const inset = size === 'compact' ? 3 : 4}
+              <span class="handle" style="top:{inset}px"></span><span class="handle" style="bottom:{inset}px"></span>
+            {/if}
           </div>
         {/each}
         {#if draft && draft.date === date}
-          {@const dh = ((draft.endMin - draft.startMin) / 60) * hourPx - 4}
-          <div class="ev selected draft" data-key="draft" style="--tint:var(--{draft.colour});left:4px;right:4px;top:calc({pct(draft.startMin)}% + 2px);height:calc({(draft.endMin - draft.startMin) / SPAN * 100}% - 4px)">
-            <div class="t"><i></i><span>{draft.title || '(No title)'}</span></div>
-            {#if dh >= 50}<div class="time">{fmtTime(draft.startMin)}–{fmtTime(draft.endMin)}</div>{/if}
+          {@const h = heightPx(draft.startMin, draft.endMin)}
+          {@const size = sizeOf(h)}
+          <div class="ev selected draft {size}" data-key="draft" style="--tint:var(--{draft.colour});left:4px;right:4px;top:calc({pct(draft.startMin)}% + 2px);height:calc({(draft.endMin - draft.startMin) / SPAN * 100}% - 4px)">
+            {@render card(draft.title || '(No title)', 'none', draft.startMin, draft.endMin, size, h)}
           </div>
         {/if}
         {#if preview && preview.from.date === date}
-          <div class="ghost orig" style="top:calc({pct(preview.from.startMin)}% + 2px);height:calc({(preview.from.endMin - preview.from.startMin) / SPAN * 100}% - 4px)"></div>
+          {@const [fs, fe] = clip(preview.from.startMin, preview.from.endMin)}
+          <div class="ghost orig" style="top:calc({pct(fs)}% + 2px);height:calc({(fe - fs) / SPAN * 100}% - 4px)"></div>
         {/if}
         {#if preview && preview.to.date === date}
           {@const t = preview.to}
-          <div class="ev selected draft" style="--tint:var(--{preview.colour});left:4px;right:4px;top:calc({pct(t.startMin)}% + 2px);height:calc({(t.endMin - t.startMin) / SPAN * 100}% - 4px)">
-            <div class="t"><i></i><span>{preview.title}</span></div>
-            {#if ((t.endMin - t.startMin) / 60) * hourPx - 4 >= 50}<div class="time">{fmtTime(t.startMin)}–{fmtTime(t.endMin)}</div>{/if}
+          {@const [ps, pe] = clip(t.startMin, t.endMin)}
+          {@const h = heightPx(ps, pe)}
+          {@const size = sizeOf(h)}
+          <div class="ev selected draft {size}" style="--tint:var(--{preview.colour});left:4px;right:4px;top:calc({pct(ps)}% + 2px);height:calc({(pe - ps) / SPAN * 100}% - 4px)">
+            {@render card(preview.title, 'none', t.startMin, t.endMin, size, h)}
           </div>
         {/if}
         {#if active && active.cur.date === date}
@@ -195,7 +226,7 @@
             {fmtTime(c.startMin)}–{fmtTime(c.endMin)}
           </div>
         {/if}
-        {#if date === today && now >= START_HOUR * 60 && now <= END_HOUR * 60}
+        {#if date === today && now >= MIN && now <= MAX}
           <div class="now" style="top:{pct(now)}%"></div>
         {/if}
       </div>
@@ -223,6 +254,8 @@
   .day.today { background: rgba(255,255,255,.035); }
   .day.weekend { background: rgba(255,255,255,.015); }
   .line { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+  .line.major { background: rgba(255,255,255,.11); }
+  .line.minor { background: rgba(255,255,255,.045); }
 
   .ev {
     position: absolute; border-radius: 14px; padding: 7px 10px; overflow: hidden;
@@ -252,7 +285,14 @@
     background: rgba(22,26,42,.88); border: 1px solid rgba(255,255,255,.18); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
   :global(body.drag-move), :global(body.drag-move *) { cursor: grabbing !important; }
   :global(body.drag-resize), :global(body.drag-resize *) { cursor: ns-resize !important; }
+  .ev.mid { padding: 5px 9px; border-radius: 12px; }
+  .ev.compact { padding: 0 8px; border-radius: 10px; justify-content: center; }
+  .ev.compact .t { font-size: 12px; line-height: 14px; }
+  .ev.compact .edge { height: 5px; }
+  .st { flex: none; font-style: normal; font-size: 11px; font-weight: 500; color: rgba(255,255,255,.75); font-variant-numeric: tabular-nums; }
   .ev.squeezed { padding: 7px 6px; }
+  .ev.mid.squeezed { padding: 5px 6px; }
+  .ev.compact.squeezed { padding: 0 6px; }
   .ev.squeezed .time { padding-left: 0; }
   .t { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; line-height: 16px; }
   .t i { width: 7px; height: 7px; border-radius: 50%; flex: none; background: rgb(var(--tint)); }

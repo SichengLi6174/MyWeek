@@ -5,6 +5,8 @@
   import EventForm from './lib/EventForm.svelte'
   import EventDetails from './lib/EventDetails.svelte'
   import RecurringDialog from './lib/RecurringDialog.svelte'
+  import SettingsPopover from './lib/SettingsPopover.svelte'
+  import { settings, saveSettings, applySettings } from './lib/settings.svelte.js'
   import { todayStr, weekStart, addDays, weekDates, nowMin, daysBetween, fmtTime, fmtShortDate } from './lib/dates.js'
   import { sampleEvents } from './lib/sample.js'
   import { loadEvents, saveEvents, expand, newId, exportJSON, parseImport } from './lib/events.js'
@@ -22,12 +24,13 @@
   }
 
   let warned = false
-  $effect(() => {
-    if (!saveEvents($state.snapshot(events)) && !warned) {
-      warned = true
-      say("This browser won't let My Week save. Use Export JSON to keep a backup.", 'error', 0)
-    }
-  })
+  const saveFailed = () => {
+    if (warned) return
+    warned = true
+    say("This browser won't let My Week save. Use Export JSON to keep a backup.", 'error', 0)
+  }
+  $effect(() => { if (!saveEvents($state.snapshot(events))) saveFailed() })
+  $effect(() => { if (!saveSettings($state.snapshot(settings))) saveFailed() })
 
   // Keep "today" right if the page stays open past midnight.
   $effect(() => {
@@ -41,7 +44,7 @@
   })
 
   function exportData() {
-    const blob = new Blob([exportJSON($state.snapshot(events))], { type: 'application/json' })
+    const blob = new Blob([exportJSON($state.snapshot(events), $state.snapshot(settings))], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -58,6 +61,7 @@
     if (events.length && !confirm(`Replace your ${events.length} current events with the ${r.events.length} in "${file.name}"?`)) return
     close()
     events = r.events
+    if (r.settings) applySettings(r.settings)
     say(`Imported ${r.events.length} event${r.events.length === 1 ? '' : 's'}.`)
   }
 
@@ -219,10 +223,10 @@
   }
   // Re-read the occurrence from the data so the popover reflects changes.
   const current = $derived.by(() => {
-    if (pop?.kind === 'create' || !pop) return null
+    if (!pop || pop.kind === 'create' || pop.kind === 'settings') return null
     return expand(events, weekDates(pop.occ.date)).find((o) => o.key === pop.occ.key) ?? null
   })
-  $effect(() => { if (pop && pop.kind !== 'create' && !current) close() })
+  $effect(() => { if (pop && pop.kind !== 'create' && pop.kind !== 'settings' && !current) close() })
 
   function duplicate() {
     const c = current
@@ -234,11 +238,17 @@
 
   function newEvent() {
     const d = weekDates(anchor).includes(today) ? today : anchor
-    const h = Math.min(16, Math.max(7, Math.ceil(nowMin() / 60)))
-    const startMin = d === today ? h * 60 : 9 * 60
+    const first = settings.dayStart, last = settings.dayEnd - 1
+    const h = Math.min(last, Math.max(first, Math.ceil(nowMin() / 60)))
+    const startMin = (d === today ? h : Math.min(last, Math.max(first, 9))) * 60
     draft = { date: d, startMin, endMin: startMin + 60, title: '', colour: 'medium', repeat: 'none', notes: '' }
     pop = { kind: 'create' }
   }
+
+  // Events in this week that fall partly or wholly outside the visible hours.
+  const hidden = $derived(
+    expand(events, weekDates(anchor)).filter((o) => o.startMin < settings.dayStart * 60 || o.endMin > settings.dayEnd * 60).length,
+  )
 
   const sweeping = (d) => { if (d && pop) pop = null; draft = d }
   const sweepEnd = () => { if (draft) pop = { kind: 'create' } }
@@ -255,12 +265,18 @@
     onnext={() => (anchor = addDays(anchor, 7))}
     ontoday={() => (anchor = weekStart(today))}
     onnew={newEvent}
+    {hidden}
+    onsettings={() => { draft = null; pop = pop?.kind === 'settings' ? null : { kind: 'settings' } }}
     onexport={exportData}
     onimport={importData}
   />
   <WeekGrid {anchor} {today} {events} {draft} {selectedKey} {preview} onsweep={sweeping} onsweepend={sweepEnd} onopen={open} onmoveend={moveOcc} />
 
-  {#if pop?.kind === 'create' && draft}
+  {#if pop?.kind === 'settings'}
+    <Popover anchorKey="settings" width={360} placement="below" label="Settings" onclose={closePop}>
+      <SettingsPopover onclose={close} />
+    </Popover>
+  {:else if pop?.kind === 'create' && draft}
     <Popover anchorKey="draft" label="New event" onclose={closePop}>
       <EventForm initial={draft} onlive={(f) => (draft = f)} onsave={save} onclose={close} />
     </Popover>
@@ -292,7 +308,7 @@
 
 <style>
   .app {
-    position: relative; height: 100%; overflow: hidden; padding: 24px;
+    position: relative; height: 100%; overflow: hidden; overflow: clip; padding: 24px;
     display: flex; flex-direction: column; gap: 12px;
   }
   .toast {

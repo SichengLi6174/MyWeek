@@ -1,7 +1,7 @@
 <script>
   import { monthYear, isoWeek, weekRange } from './dates.js'
 
-  let { anchor, onprev, onnext, ontoday, onnew = () => {}, onexport, onimport } = $props()
+  let { anchor, onprev, onnext, ontoday, onnew = () => {}, onexport, onimport, onsettings = () => {}, hidden = 0 } = $props()
 
   let menuOpen = $state(false)
   let wrap = $state()
@@ -20,6 +20,9 @@
   <div class="title">
     <h1>{monthYear(anchor)}</h1>
     <span>Week {isoWeek(anchor)} · {weekRange(anchor)}</span>
+    {#if hidden}
+      <button class="note" onclick={onsettings} title="Change the visible hours">{hidden} event{hidden === 1 ? '' : 's'} outside visible hours</button>
+    {/if}
   </div>
   <div class="right">
     <div class="legend">
@@ -33,6 +36,9 @@
       <button onclick={ontoday}>Today</button>
       <button aria-label="Next week" onclick={onnext}>›</button>
     </div>
+    <button class="seg-btn" data-key="settings" aria-label="Day length and grid settings" onclick={onsettings}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+    </button>
     <div class="more" bind:this={wrap}>
       <button class="seg-btn" aria-label="Backup" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
@@ -64,6 +70,8 @@
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   }
   .seg button { height: 42px; min-width: 44px; border: 0; background: transparent; font-size: 14px; font-weight: 600; padding: 0 10px; }
+  .note { border: 0; background: rgba(255,255,255,.08); border-radius: 12px; padding: 3px 10px; font-size: 12px; color: rgba(244,246,251,.8); }
+  .note:hover { background: rgba(255,255,255,.14); }
   .more { position: relative; }
   .seg-btn {
     width: 44px; height: 44px; border-radius: 22px; background: rgba(255,255,255,.08); display: grid; place-items: center;

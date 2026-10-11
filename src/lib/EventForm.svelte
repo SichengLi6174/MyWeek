@@ -1,12 +1,13 @@
 <script>
   import Icon from './Icon.svelte'
   import Select from './Select.svelte'
-  import { fmtTime, fmtShortDate, fmtDuration, START_HOUR, END_HOUR } from './dates.js'
+  import { fmtTime, fmtShortDate, fmtDuration } from './dates.js'
+  import { settings } from './settings.svelte.js'
   import { repeatLabel } from './events.js'
 
   let { initial, onlive = () => {}, onsave, onclose } = $props()
 
-  const MIN = START_HOUR * 60, MAX = END_HOUR * 60
+  const MIN = $derived(settings.dayStart * 60), MAX = $derived(settings.dayEnd * 60)
   // svelte-ignore state_referenced_locally
   let f = $state({ ...initial })
   const COLOURS = [['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['personal', 'Personal']]
@@ -94,11 +95,6 @@
   }
   .title::placeholder { color: rgba(244,246,251,.45); }
   .title:focus { border-color: rgba(var(--c), .85); box-shadow: 0 0 0 3px rgba(var(--c), .28); }
-  :global(.pop .well) {
-    height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.08);
-    color: #f4f6fb; font: inherit; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 10px;
-    font-variant-numeric: tabular-nums;
-  }
   .datewell { position: relative; padding: 0 14px; cursor: pointer; }
   .datewell input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
   .dash { opacity: .5; margin: -6px; }
