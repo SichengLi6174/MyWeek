@@ -17,7 +17,7 @@ npm run dev
 
 Then open http://localhost:5173.
 
-## Build the single-file version
+## Build the single-file version (Recommended)
 
 ```bash
 npm run build
